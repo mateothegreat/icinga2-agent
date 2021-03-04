@@ -1,0 +1,43 @@
+- set_fact:
+    cert: "{{ icinga2_agent.master.cert }}"
+
+- name: "Copy master certificate"
+  copy:
+    dest: "/tmp/master.crt"
+    mode: '0777'
+    content: "{{ cert }}"
+
+- local_action:
+    module: add_host
+    hostname: "icinga2_master"
+    ansible_host: "{{ icinga2_agent.master.host }}"
+    ansible_user: "{{ icinga2_agent.master.user }}"
+    ansible_ssh_private_key_file: "{{ icinga2_agent.master.key }}"
+    ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+
+- name: "Retrieve setup ticket from master"
+  become: "true"
+  command: /usr/sbin/icinga2 pki ticket --cn "{{ inventory_hostname }}"
+  register: ticket
+  delegate_to: "icinga2_master"
+
+- debug: var=ticket
+
+- name: "Setup agent on target"
+  become: "true"
+  command: "/usr/sbin/icinga2 node setup --endpoint {{ icinga2_agent.master.host }} --zone {{ inventory_hostname }} --cn {{ inventory_hostname }} --ticket {{ ticket.stdout }} --accept-config --accept-commands --parent_host {{ icinga2_agent.master.host }} --trustedcert /tmp/master.crt"
+  register: setup_output
+
+- debug: var=setup_output
+
+- name: "Delete master certificate"
+  become: "true"
+  file:
+    path: "/tmp/master.crt"
+    state: "absent"
+
+- name: "Restart icinga2 agent"
+  become: "true"
+  systemd:
+    name: "icinga2"
+    state: "restarted"

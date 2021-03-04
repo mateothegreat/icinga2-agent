@@ -1,0 +1,9 @@
+- name: "Setup epel repo"
+  become: true
+  yum:
+    name:
+      - "epel-release"
+
+- become: "true"
+  import_role:
+    name: adfinis-sygroup.icinga2_agent
